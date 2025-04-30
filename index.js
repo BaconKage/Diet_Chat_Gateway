@@ -15,7 +15,13 @@ app.use(bodyParser.json());
 
 app.post('/login', (req, res) => {
   const { username } = req.body;
-  const token = jwt.sign({ username }, SECRET_KEY, { expiresIn: '1h' });
+const authHeader = req.headers['authorization'];
+const token = authHeader && authHeader.startsWith('Bearer ')
+  ? authHeader.split(' ')[1]
+  : authHeader;
+
+if (!token) return res.status(403).send("No token provided.");
+
   res.json({ token });
 });
 
