@@ -1,4 +1,5 @@
 // node/index.js
+require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
 const jwt = require('jsonwebtoken');
@@ -33,11 +34,12 @@ app.post('/chat', verifyToken, async (req, res) => {
   const { message, planType } = req.body;
 
   try {
-    const response = await axios.post(
-      'https://d053-34-169-79-250.ngrok-free.app/ai/chat',
-      { message, planType },
-      { headers: { 'Content-Type': 'application/json' } }
-    );
+const response = await axios.post(
+  process.env.FASTAPI_URL,
+  { message, planType },
+  { headers: { 'Content-Type': 'application/json' } }
+);
+
 
     res.json(response.data);
   } catch (error) {
