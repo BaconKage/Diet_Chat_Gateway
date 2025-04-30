@@ -3,12 +3,14 @@ require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
 const jwt = require('jsonwebtoken');
+const cors = require('cors'); // ✅ Add CORS
 const bodyParser = require('body-parser');
 
 const app = express();
 const PORT = 3000;
-const SECRET_KEY = 'my-secret-key';
+const SECRET_KEY = process.env.SECRET_KEY || 'my-secret-key';
 
+app.use(cors()); // ✅ Enable CORS
 app.use(bodyParser.json());
 
 app.post('/login', (req, res) => {
@@ -34,12 +36,11 @@ app.post('/chat', verifyToken, async (req, res) => {
   const { message, planType } = req.body;
 
   try {
-const response = await axios.post(
-  process.env.FASTAPI_URL,
-  { message, planType },
-  { headers: { 'Content-Type': 'application/json' } }
-);
-
+    const response = await axios.post(
+      process.env.FASTAPI_URL,
+      { message, planType },
+      { headers: { 'Content-Type': 'application/json' } }
+    );
 
     res.json(response.data);
   } catch (error) {
