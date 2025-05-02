@@ -1,5 +1,3 @@
-// node/index.js
-const userPlans = {}; // { "John Doe": "your plan here" }
 require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
@@ -11,15 +9,18 @@ const csv = require('csv-parser');
 const fs = require('fs');
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 const SECRET_KEY = process.env.SECRET_KEY || 'my-secret-key';
+const FASTAPI_URL = process.env.FASTAPI_URL || 'https://diet-chat-bot.onrender.com/ai/chat';
+
 const upload = multer({ dest: 'uploads/' });
+const userPlans = {}; // In-memory plan store
 
 app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// ✅ LOGIN Route (returns JWT token)
+// ✅ Route: Login → get JWT token
 app.post('/login', (req, res) => {
   const { username } = req.body;
 
@@ -31,7 +32,7 @@ app.post('/login', (req, res) => {
   res.json({ token });
 });
 
-// ✅ Token Middleware
+// ✅ Middleware: Token check
 function verifyToken(req, res, next) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.startsWith('Bearer ')
@@ -49,25 +50,29 @@ function verifyToken(req, res, next) {
   }
 }
 
-// ✅ CHAT route (single message)
+// ✅ Route: Chat → generate single plan
 app.post('/chat', verifyToken, async (req, res) => {
   const { message, planType } = req.body;
+  const username = req.user?.username || 'anonymous';
 
   try {
     const response = await axios.post(
-      process.env.FASTAPI_URL,
+      FASTAPI_URL,
       { message, planType },
       { headers: { 'Content-Type': 'application/json' } }
     );
 
-    res.json(response.data);
+    const reply = response.data.reply || "⚠️ No reply";
+    userPlans[username] = reply;
+
+    res.json({ reply });
   } catch (error) {
-    console.error("❌ FastAPI Error:", error.response?.data || error.message);
-    res.status(500).json(error.response?.data || { error: "Unknown error" });
+    console.error("❌ Chat error:", error.message);
+    res.status(500).json({ error: error.message });
   }
 });
 
-// ✅ CHAT route (batch file upload)
+// ✅ Route: CSV upload → generate multiple plans
 app.post('/chat/file', upload.single('file'), async (req, res) => {
   const token = req.body.token;
   const filePath = req.file.path;
@@ -92,31 +97,56 @@ app.post('/chat/file', upload.single('file'), async (req, res) => {
 
       try {
         const response = await axios.post(
-          process.env.FASTAPI_URL,
+          FASTAPI_URL,
           { message: prompt, planType: duration },
-          { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } }
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          }
         );
 
+        const plan = response.data.reply || "⚠️ No reply";
+        userPlans[name] = plan;
+
+        results.push({ name, plan });
+
+      } catch (err) {
         results.push({
-          name,
-          plan: response.data.reply || '⚠️ No reply'
-        });
-      } catch (error) {
-        results.push({
-          name,
-          plan: `❌ Error for ${name}: ${error.message}`
+          name: user.name || 'Unknown',
+          plan: `❌ Error: ${err.message}`
         });
       }
     }
 
-    fs.unlinkSync(filePath); // clean up temp file
+    fs.unlinkSync(filePath);
     res.json({ plans: results });
 
-  } catch (err) {
-    res.status(500).json({ error: "Failed to process CSV", details: err.message });
+  } catch (error) {
+    console.error("❌ CSV processing error:", error.message);
+    res.status(500).json({ error: "Failed to process CSV", details: error.message });
   }
 });
 
+// ✅ Route: User view → get diet plan by name
+app.get('/plan/:username', (req, res) => {
+  const username = req.params.username;
+  const plan = userPlans[username];
+
+  if (plan) {
+    res.json({ plan });
+  } else {
+    res.status(404).json({ error: "No plan found for this user." });
+  }
+});
+
+// ✅ Health check
+app.get('/', (req, res) => {
+  res.send("✅ Diet Chat Gateway is running.");
+});
+
+// ✅ Start server
 app.listen(PORT, () => {
-  console.log(`✅ Node.js server running at http://localhost:${PORT}`);
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
