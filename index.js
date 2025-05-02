@@ -1,4 +1,5 @@
 // node/index.js
+const userPlans = {}; // { "John Doe": "your plan here" }
 require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
