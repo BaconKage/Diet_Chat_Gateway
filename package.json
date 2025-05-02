@@ -2,12 +2,18 @@
   "name": "ai-chatbot-node",
   "version": "1.0.0",
   "main": "index.js",
-"dependencies": {
-  "axios": "^1.6.7",
-  "body-parser": "^1.20.2",
-  "cors": "^2.8.5",
-  "dotenv": "^16.0.3",
-  "express": "^4.18.2",
-  "jsonwebtoken": "^9.0.0"
-}
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.7",
+    "body-parser": "^1.20.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.3",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.0",
+    "multer": "^1.4.5",
+    "csv-parser": "^3.0.0",
+    "node-fetch": "^2.6.7"
+  }
 }
