@@ -66,7 +66,7 @@ function verifyToken(req, res, next) {
   }
 }
 
-// ✅ /chat → Single plan generation
+// ✅ /chat → Manual plan generation
 app.post('/chat', verifyToken, async (req, res) => {
   const { message, planType } = req.body;
   const username = req.user?.username || 'anonymous';
@@ -93,7 +93,7 @@ app.post('/chat', verifyToken, async (req, res) => {
   }
 });
 
-// ✅ /chat/file → Bulk upload via CSV
+// ✅ /chat/file → Bulk CSV Upload
 app.post('/chat/file', upload.single('file'), async (req, res) => {
   const token = req.body.token;
   const filePath = req.file.path;
@@ -155,7 +155,43 @@ app.post('/chat/file', upload.single('file'), async (req, res) => {
   }
 });
 
-// ✅ /plan/:username → User view route
+// ✅ /chat/fromdb/:username → Generate Plan from DB
+app.post('/chat/fromdb/:username', verifyToken, async (req, res) => {
+  const username = req.params.username;
+
+  try {
+    const user = await UserPlan.findOne({ name: username });
+
+    if (!user) return res.status(404).json({ error: "User not found in database." });
+
+    const { age, gender, goal, BMI, diet_type, duration } = user;
+
+    const prompt = `A ${age}-year-old ${diet_type} ${gender} wants to ${goal}. BMI is ${BMI}.`;
+
+    const response = await axios.post(
+      FASTAPI_URL,
+      { message: prompt, planType: duration },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: req.headers['authorization']
+        }
+      }
+    );
+
+    const plan = response.data.reply || "⚠️ No reply";
+    user.plan = plan;
+    await user.save();
+
+    res.json({ plan });
+
+  } catch (err) {
+    console.error("❌ Error generating plan from MongoDB:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ✅ /plan/:username → View Plan
 app.get('/plan/:username', async (req, res) => {
   const username = req.params.username;
 
