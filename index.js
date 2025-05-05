@@ -11,7 +11,7 @@ const FASTAPI_URL = process.env.FASTAPI_URL || 'https://diet-chat-bot.onrender.c
 app.use(cors());
 app.use(express.json());
 
-// MongoDB connection
+// ✅ Connect to MongoDB
 mongoose.connect(process.env.CONNECTION_STRING, {
   useNewUrlParser: true,
   useUnifiedTopology: true
@@ -31,7 +31,7 @@ const userSchema = new mongoose.Schema({
 
 const UserPlan = mongoose.model("UserPlan", userSchema);
 
-// ✅ ONLY ONE ROUTE — NO TOKEN REQUIRED
+// ✅ Route to get a user's plan based on MongoDB data
 app.post('/chat/fromdb/:username', async (req, res) => {
   const username = req.params.username;
 
@@ -63,11 +63,22 @@ app.post('/chat/fromdb/:username', async (req, res) => {
   }
 });
 
-// Health check
-app.get('/', (req, res) => {
-  res.send("✅ Minimal AI Diet Gateway is running.");
+// ✅ Route to list all users in the DB (for debugging)
+app.get('/debug/all-users', async (req, res) => {
+  try {
+    const users = await UserPlan.find({});
+    res.json({ count: users.length, users });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
+// ✅ Health check
+app.get('/', (req, res) => {
+  res.send("✅ Diet Chat Gateway (Mongo Only) is live.");
+});
+
+// ✅ Start the server
 app.listen(PORT, () => {
   console.log(`🚀 Server running at http://localhost:${PORT}`);
 });
