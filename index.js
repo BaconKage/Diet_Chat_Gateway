@@ -11,7 +11,7 @@ const FASTAPI_URL = process.env.FASTAPI_URL || 'https://diet-chat-bot.onrender.c
 app.use(cors());
 app.use(express.json());
 
-// MongoDB setup
+// MongoDB connection
 mongoose.connect(process.env.CONNECTION_STRING, {
   useNewUrlParser: true,
   useUnifiedTopology: true
@@ -31,17 +31,18 @@ const userSchema = new mongoose.Schema({
 
 const UserPlan = mongoose.model("UserPlan", userSchema);
 
-// 🔥 Only this route
+// ✅ ONLY ONE ROUTE — NO TOKEN REQUIRED
 app.post('/chat/fromdb/:username', async (req, res) => {
   const username = req.params.username;
 
   try {
     const user = await UserPlan.findOne({ name: username });
 
-    if (!user) return res.status(404).json({ error: "User not found in database." });
+    if (!user) {
+      return res.status(404).json({ error: "User not found in database." });
+    }
 
     const { age, gender, goal, BMI, diet_type, duration } = user;
-
     const prompt = `A ${age}-year-old ${diet_type} ${gender} wants to ${goal}. BMI is ${BMI}.`;
 
     const response = await axios.post(
@@ -50,21 +51,21 @@ app.post('/chat/fromdb/:username', async (req, res) => {
       { headers: { 'Content-Type': 'application/json' } }
     );
 
-    const plan = response.data.reply || "⚠️ No reply";
+    const plan = response.data.reply || "⚠️ No reply generated";
     user.plan = plan;
     await user.save();
 
     res.json({ plan });
 
-  } catch (err) {
-    console.error("❌ Error:", err.message);
-    res.status(500).json({ error: err.message });
+  } catch (error) {
+    console.error("❌ Error:", error.message);
+    res.status(500).json({ error: "Something went wrong", detail: error.message });
   }
 });
 
-// 🧪 Health check
+// Health check
 app.get('/', (req, res) => {
-  res.send("✅ Minimal MongoDB-only Diet Plan Server is live.");
+  res.send("✅ Minimal AI Diet Gateway is running.");
 });
 
 app.listen(PORT, () => {
