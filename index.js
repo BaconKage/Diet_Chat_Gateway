@@ -7,32 +7,48 @@ const bodyParser = require('body-parser');
 const multer = require('multer');
 const csv = require('csv-parser');
 const fs = require('fs');
+const mongoose = require('mongoose');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const SECRET_KEY = process.env.SECRET_KEY || 'my-secret-key';
 const FASTAPI_URL = process.env.FASTAPI_URL || 'https://diet-chat-bot.onrender.com/ai/chat';
-
 const upload = multer({ dest: 'uploads/' });
-const userPlans = {}; // In-memory plan store
+
+// ✅ MongoDB Setup
+mongoose.connect(process.env.CONNECTION_STRING, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+}).then(() => console.log("✅ Connected to MongoDB"))
+  .catch(err => console.error("❌ MongoDB connection error:", err));
+
+const userSchema = new mongoose.Schema({
+  name: String,
+  age: Number,
+  gender: String,
+  goal: String,
+  BMI: Number,
+  diet_type: String,
+  duration: String,
+  plan: String
+});
+
+const UserPlan = mongoose.model("UserPlan", userSchema);
 
 app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// ✅ Route: Login → get JWT token
+// ✅ /login → Get JWT token
 app.post('/login', (req, res) => {
   const { username } = req.body;
-
-  if (!username) {
-    return res.status(400).json({ error: "Username is required" });
-  }
+  if (!username) return res.status(400).json({ error: "Username is required" });
 
   const token = jwt.sign({ username }, SECRET_KEY, { expiresIn: '1h' });
   res.json({ token });
 });
 
-// ✅ Middleware: Token check
+// ✅ Token Middleware
 function verifyToken(req, res, next) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.startsWith('Bearer ')
@@ -50,7 +66,7 @@ function verifyToken(req, res, next) {
   }
 }
 
-// ✅ Route: Chat → generate single plan
+// ✅ /chat → Single plan generation
 app.post('/chat', verifyToken, async (req, res) => {
   const { message, planType } = req.body;
   const username = req.user?.username || 'anonymous';
@@ -63,7 +79,12 @@ app.post('/chat', verifyToken, async (req, res) => {
     );
 
     const reply = response.data.reply || "⚠️ No reply";
-    userPlans[username] = reply;
+
+    await UserPlan.findOneAndUpdate(
+      { name: username },
+      { name: username, plan: reply },
+      { upsert: true, new: true }
+    );
 
     res.json({ reply });
   } catch (error) {
@@ -72,7 +93,7 @@ app.post('/chat', verifyToken, async (req, res) => {
   }
 });
 
-// ✅ Route: CSV upload → generate multiple plans
+// ✅ /chat/file → Bulk upload via CSV
 app.post('/chat/file', upload.single('file'), async (req, res) => {
   const token = req.body.token;
   const filePath = req.file.path;
@@ -108,7 +129,12 @@ app.post('/chat/file', upload.single('file'), async (req, res) => {
         );
 
         const plan = response.data.reply || "⚠️ No reply";
-        userPlans[name] = plan;
+
+        await UserPlan.findOneAndUpdate(
+          { name },
+          { name, age, gender, goal, BMI, diet_type, duration, plan },
+          { upsert: true, new: true }
+        );
 
         results.push({ name, plan });
 
@@ -129,24 +155,27 @@ app.post('/chat/file', upload.single('file'), async (req, res) => {
   }
 });
 
-// ✅ Route: User view → get diet plan by name
-app.get('/plan/:username', (req, res) => {
+// ✅ /plan/:username → User view route
+app.get('/plan/:username', async (req, res) => {
   const username = req.params.username;
-  const plan = userPlans[username];
 
-  if (plan) {
-    res.json({ plan });
-  } else {
-    res.status(404).json({ error: "No plan found for this user." });
+  try {
+    const user = await UserPlan.findOne({ name: username });
+    if (!user || !user.plan) {
+      return res.status(404).json({ error: "No plan found for this user." });
+    }
+    res.json({ plan: user.plan });
+  } catch (err) {
+    res.status(500).json({ error: "Error fetching plan", details: err.message });
   }
 });
 
 // ✅ Health check
 app.get('/', (req, res) => {
-  res.send("✅ Diet Chat Gateway is running.");
+  res.send("✅ Diet Chat Gateway with MongoDB is running.");
 });
 
 // ✅ Start server
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(`🚀 Server running at http://localhost:${PORT}`);
 });
