@@ -72,6 +72,25 @@ app.get('/debug/all-users', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+app.get('/debug/seed', async (req, res) => {
+  try {
+    const user = new UserPlan({
+      name: "Riya Kapoor",
+      age: 27,
+      gender: "female",
+      goal: "gain muscle",
+      BMI: 21.4,
+      diet_type: "vegetarian",
+      duration: "month"
+    });
+
+    await user.save();
+    res.json({ message: "✅ Sample user added", user });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 // ✅ Health check
 app.get('/', (req, res) => {
