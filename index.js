@@ -1,12 +1,12 @@
-require('dotenv').config();
-const express = require('express');
-const axios = require('axios');
-const cors = require('cors');
-const bodyParser = require('body-parser');
-const multer = require('multer');
-const csv = require('csv-parser');
-const fs = require('fs');
-const mongoose = require('mongoose');
+import dotenv from 'dotenv';
+import express from 'express';
+import axios from 'axios';
+import cors from 'cors';
+import bodyParser from 'body-parser';
+import multer from 'multer';
+import mongoose from 'mongoose';
+
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -36,16 +36,6 @@ const UserPlan = mongoose.model("UserPlan", userSchema);
 app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-
-// ✅ Clear all users (for reset)
-app.get('/debug/clear', async (req, res) => {
-  try {
-    await UserPlan.deleteMany({});
-    res.json({ message: "🧹 All users deleted from MongoDB." });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
 
 // ✅ /chat/fromdb/:username → Generate from MongoDB
 app.post('/chat/fromdb/:username', async (req, res) => {
@@ -95,31 +85,6 @@ app.get('/debug/all-users', async (req, res) => {
   try {
     const users = await UserPlan.find({});
     res.json({ count: users.length, users });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ✅ Debug: Seed multiple users without plans
-app.get('/debug/seed', async (req, res) => {
-  try {
-    const sampleUsers = [
-      { name: "Riya Kapoor", age: 27, gender: "female", goal: "gain muscle", BMI: 21.4, diet_type: "vegetarian", duration: "month" },
-      { name: "John Doe", age: 35, gender: "male", goal: "lose fat", BMI: 29.8, diet_type: "non-vegetarian", duration: "week" },
-      { name: "Aarav Patel", age: 22, gender: "male", goal: "stay fit", BMI: 23.1, diet_type: "vegetarian", duration: "month" },
-      { name: "Sneha Rao", age: 30, gender: "female", goal: "improve stamina", BMI: 20.2, diet_type: "vegan", duration: "week" },
-      { name: "Kabir Mehra", age: 28, gender: "male", goal: "gain weight", BMI: 18.5, diet_type: "vegetarian", duration: "month" }
-    ];
-
-    const inserts = await Promise.all(sampleUsers.map(async (userData) => {
-      return await UserPlan.findOneAndUpdate(
-        { name: userData.name },
-        userData,
-        { upsert: true, new: true, setDefaultsOnInsert: true }
-      );
-    }));
-
-    res.json({ message: "✅ Sample users added/updated", users: inserts });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
