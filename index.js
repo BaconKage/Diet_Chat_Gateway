@@ -1,17 +1,19 @@
 require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
-const mongoose = require('mongoose');
 const cors = require('cors');
+const bodyParser = require('body-parser');
+const multer = require('multer');
+const csv = require('csv-parser');
+const fs = require('fs');
+const mongoose = require('mongoose');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const FASTAPI_URL = process.env.FASTAPI_URL || 'https://diet-chat-bot.onrender.com/ai/chat';
+const upload = multer({ dest: 'uploads/' });
 
-app.use(cors());
-app.use(express.json());
-
-// ✅ Connect to MongoDB
+// ✅ MongoDB Setup
 mongoose.connect(process.env.CONNECTION_STRING, {
   useNewUrlParser: true,
   useUnifiedTopology: true
@@ -31,19 +33,21 @@ const userSchema = new mongoose.Schema({
 
 const UserPlan = mongoose.model("UserPlan", userSchema);
 
-// ✅ Route to get a user's plan based on MongoDB data
+app.use(cors());
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+
+// ✅ /chat/fromdb/:username → Generate from MongoDB
 app.post('/chat/fromdb/:username', async (req, res) => {
   const username = req.params.username;
 
   try {
     const user = await UserPlan.findOne({ name: username });
+    if (!user) return res.status(404).json({ error: "User not found in database." });
 
-    if (!user) {
-      return res.status(404).json({ error: "User not found in database." });
-    }
+    const { age, gender, BMI, diet_type, goal, duration } = user;
 
-    const { age, gender, goal, BMI, diet_type, duration } = user;
-    const prompt = `A ${age}-year-old ${diet_type} ${gender} wants to ${goal}. BMI is ${BMI}.`;
+    const prompt = `Client Profile:\n- Age: ${age}\n- Gender: ${gender}\n- BMI: ${BMI}\n- Diet Preference: ${diet_type}\n- Goal: ${goal}\n- Duration: ${duration}\n\nPlease provide a complete ${duration} diet plan with:\n1. Weekly calorie targets\n2. Macronutrient breakdown (Protein, Carbs, Fats)\n3. 3 Main meals + 2 snacks per day\n4. Foods rich in essential nutrients\n5. Hydration tips and optional supplements\n\nOutput format:\n- Weekly Summary\n- Daily Meal Plan\n- Notes`;
 
     const response = await axios.post(
       FASTAPI_URL,
@@ -51,19 +55,27 @@ app.post('/chat/fromdb/:username', async (req, res) => {
       { headers: { 'Content-Type': 'application/json' } }
     );
 
-    const plan = response.data.reply || "⚠️ No reply generated";
-    user.plan = plan;
-    await user.save();
+    const reply = response.data.reply || "⚠️ No reply";
 
-    res.json({ plan });
+    await UserPlan.findOneAndUpdate(
+      { name: username },
+      { plan: reply },
+      { new: true }
+    );
 
+    res.json({ reply });
   } catch (error) {
-    console.error("❌ Error:", error.message);
-    res.status(500).json({ error: "Something went wrong", detail: error.message });
+    console.error("❌ Error in /chat/fromdb:", error.message);
+    res.status(500).json({ error: error.message });
   }
 });
 
-// ✅ Route to list all users in the DB (for debugging)
+// ✅ Health check
+app.get('/', (req, res) => {
+  res.send("✅ Diet Chat Gateway with MongoDB is running.");
+});
+
+// ✅ Debug: List all users
 app.get('/debug/all-users', async (req, res) => {
   try {
     const users = await UserPlan.find({});
@@ -72,6 +84,8 @@ app.get('/debug/all-users', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// ✅ Debug: Seed one user
 app.get('/debug/seed', async (req, res) => {
   try {
     const user = new UserPlan({
@@ -91,13 +105,7 @@ app.get('/debug/seed', async (req, res) => {
   }
 });
 
-
-// ✅ Health check
-app.get('/', (req, res) => {
-  res.send("✅ Diet Chat Gateway (Mongo Only) is live.");
-});
-
-// ✅ Start the server
+// ✅ Start server
 app.listen(PORT, () => {
   console.log(`🚀 Server running at http://localhost:${PORT}`);
 });
