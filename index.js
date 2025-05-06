@@ -3,7 +3,6 @@ import express from 'express';
 import axios from 'axios';
 import cors from 'cors';
 import bodyParser from 'body-parser';
-import multer from 'multer';
 import mongoose from 'mongoose';
 
 dotenv.config();
@@ -11,7 +10,6 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 const FASTAPI_URL = process.env.FASTAPI_URL || 'https://diet-chat-bot.onrender.com/ai/chat';
-const upload = multer({ dest: 'uploads/' });
 
 // ✅ MongoDB Setup
 mongoose.connect(process.env.CONNECTION_STRING, {
@@ -22,75 +20,59 @@ mongoose.connect(process.env.CONNECTION_STRING, {
 
 const userSchema = new mongoose.Schema({
   name: String,
-  age: Number,
-  gender: String,
+  phone: String,
   goal: String,
-  BMI: Number,
-  diet_type: String,
-  duration: String,
-  plan: String
+  gender: String,
+  image: String,
+  username: String,
+  bio: String,
+  gym: String,
+  package: String,
+  Face_Recognition: String,
+  user_type: String,
+  user_club: String
 });
 
-const UserPlan = mongoose.model("UserPlan", userSchema);
+const User = mongoose.model("User", userSchema);
 
 app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// ✅ /chat/fromdb/:username → Generate from MongoDB
-app.post('/chat/fromdb/:username', async (req, res) => {
-  const username = req.params.username;
+// ✅ /chat/user/:phone → Generate personalized diet plan for each user by phone number
+app.post('/chat/user/:phone', async (req, res) => {
+  const phone = req.params.phone;
 
   try {
-    const user = await UserPlan.findOne({ name: username });
-    if (!user) return res.status(404).json({ error: "User not found in database." });
+    const user = await User.findOne({ phone });
+    if (!user) return res.status(404).json({ error: "User not found." });
 
-    const { age, gender, BMI, diet_type, goal, duration } = user;
+    const { name, goal, gender, bio } = user;
+    const prompt = `Client: ${name}\nGender: ${gender}\nGoal: ${goal}\nBio: ${bio || 'N/A'}`;
 
-    const profile = `Age: ${age}, Gender: ${gender}, BMI: ${BMI}, Diet: ${diet_type}, Goal: ${goal}`;
-
-    const formattedRequest = `Create a ${duration} diet plan using ONLY foods from the MongoDB 'foods' collection. Personalize it for ${profile}. Focus on meals, hydration, workouts, and one motivational tip. Return only the plan.`;
+    const formattedRequest = `Create a weekly diet plan strictly using only foods from the MongoDB foods collection for this profile. Do not hallucinate or use items outside the database. Focus on meals, hydration, supplements, and one motivational tip.\n\n${prompt}`;
 
     const response = await axios.post(
       FASTAPI_URL,
-      { message: formattedRequest, planType: duration },
+      { message: formattedRequest, planType: 'week' },
       { headers: { 'Content-Type': 'application/json' } }
     );
 
     const reply = response.data.reply?.trim();
-    if (!reply || reply.toLowerCase().includes("client profile") || reply.toLowerCase().includes("you are a certified")) {
-      return res.status(500).json({ error: "Unexpected response format from AI." });
-    }
+    if (!reply) return res.status(500).json({ error: "Empty response from AI." });
 
-    const updatedUser = await UserPlan.findOneAndUpdate(
-      { name: username },
-      { plan: reply },
-      { new: true }
-    );
-
-    res.json({ reply });
+    res.json({ name, reply });
   } catch (error) {
-    console.error("❌ Error in /chat/fromdb:", error.message);
+    console.error("❌ Error:", error.message);
     res.status(500).json({ error: error.message });
   }
 });
 
 // ✅ Health check
 app.get('/', (req, res) => {
-  res.send("✅ Diet Chat Gateway with MongoDB is running.");
+  res.send("✅ Diet Chat Gateway for Registered MyGym Users is running.");
 });
 
-// ✅ Debug: List all users
-app.get('/debug/all-users', async (req, res) => {
-  try {
-    const users = await UserPlan.find({});
-    res.json({ count: users.length, users });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ✅ Start server
 app.listen(PORT, () => {
   console.log(`🚀 Server running at http://localhost:${PORT}`);
 });
