@@ -57,11 +57,9 @@ app.post('/chat/fromdb/:username', async (req, res) => {
 
     const { age, gender, BMI, diet_type, goal, duration } = user;
 
-    const profile = `Client Profile:\n- Age: ${age}\n- Gender: ${gender}\n- BMI: ${BMI}\n- Diet Preference: ${diet_type}\n- Goal: ${goal}\n- Duration: ${duration}`;
+    const profile = `Age: ${age}, Gender: ${gender}, BMI: ${BMI}, Diet: ${diet_type}, Goal: ${goal}`;
 
-    const systemPrompt = `You are a certified AI nutritionist. Based on the following client profile, generate a personalized ${duration} diet plan.`;
-
-    const formattedRequest = `\n📋 ${profile}\n\nGenerate a complete diet plan with:\n1. Personalized calorie targets\n2. Macronutrient breakdown (carbs, protein, fats)\n3. 3 meals + 2 snacks daily\n4. Variety of healthy food\n5. Hydration, exercise & supplements\n\nOutput format:\n- Weekly Summary\n- Daily Plan\n- Tips & Notes`;
+    const formattedRequest = `Create a ${duration} diet plan using ONLY foods from the MongoDB 'foods' collection. Personalize it for ${profile}. Focus on meals, hydration, workouts, and one motivational tip. Return only the plan.`;
 
     const response = await axios.post(
       FASTAPI_URL,
@@ -70,7 +68,7 @@ app.post('/chat/fromdb/:username', async (req, res) => {
     );
 
     const reply = response.data.reply?.trim();
-    if (!reply || reply.includes("Client Profile") || reply.includes("You are a certified AI nutritionist")) {
+    if (!reply || reply.toLowerCase().includes("client profile") || reply.toLowerCase().includes("you are a certified")) {
       return res.status(500).json({ error: "Unexpected response format from AI." });
     }
 
