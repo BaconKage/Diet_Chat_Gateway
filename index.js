@@ -37,6 +37,16 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
+// ✅ Clear all users (for reset)
+app.get('/debug/clear', async (req, res) => {
+  try {
+    await UserPlan.deleteMany({});
+    res.json({ message: "🧹 All users deleted from MongoDB." });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ✅ /chat/fromdb/:username → Generate from MongoDB
 app.post('/chat/fromdb/:username', async (req, res) => {
   const username = req.params.username;
@@ -47,42 +57,24 @@ app.post('/chat/fromdb/:username', async (req, res) => {
 
     const { age, gender, BMI, diet_type, goal, duration } = user;
 
-    const prompt = `\n🧠 You are a certified AI nutritionist generating personalized diet plans.
+    const profile = `Client Profile:\n- Age: ${age}\n- Gender: ${gender}\n- BMI: ${BMI}\n- Diet Preference: ${diet_type}\n- Goal: ${goal}\n- Duration: ${duration}`;
 
-👤 Client Profile:
-- Name: ${username}
-- Age: ${age}
-- Gender: ${gender}
-- BMI: ${BMI}
-- Diet Preference: ${diet_type}
-- Goal: ${goal}
-- Duration: ${duration}
+    const systemPrompt = `You are a certified AI nutritionist. Based on the following client profile, generate a personalized ${duration} diet plan.`;
 
-📋 Generate a ${duration} diet plan tailored to the above person.
-
-💡 Include:
-1. Personalized calorie recommendations based on BMI, age, and gender
-2. Macro breakdown (carbs, protein, fats) ideal for their goal
-3. Daily meal plans (Breakfast, Lunch, Snacks, Dinner)
-4. Portion sizes and food variety
-5. Notes on hydration, exercise and supplementation tips
-
-📤 Format:
-- 🗓️ Weekly Overview
-- 🍽️ Daily Plans
-- 💬 Motivation Tips
-
-Use unique and suitable suggestions based on the above details.`;
+    const formattedRequest = `\n📋 ${profile}\n\nGenerate a complete diet plan with:\n1. Personalized calorie targets\n2. Macronutrient breakdown (carbs, protein, fats)\n3. 3 meals + 2 snacks daily\n4. Variety of healthy food\n5. Hydration, exercise & supplements\n\nOutput format:\n- Weekly Summary\n- Daily Plan\n- Tips & Notes`;
 
     const response = await axios.post(
       FASTAPI_URL,
-      { message: prompt, planType: duration },
+      { message: formattedRequest, planType: duration },
       { headers: { 'Content-Type': 'application/json' } }
     );
 
-    const reply = response.data.reply || "⚠️ No reply";
+    const reply = response.data.reply?.trim();
+    if (!reply || reply.includes("Client Profile") || reply.includes("You are a certified AI nutritionist")) {
+      return res.status(500).json({ error: "Unexpected response format from AI." });
+    }
 
-    await UserPlan.findOneAndUpdate(
+    const updatedUser = await UserPlan.findOneAndUpdate(
       { name: username },
       { plan: reply },
       { new: true }
