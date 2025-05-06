@@ -47,7 +47,32 @@ app.post('/chat/fromdb/:username', async (req, res) => {
 
     const { age, gender, BMI, diet_type, goal, duration } = user;
 
-    const prompt = `Client Profile:\n- Age: ${age}\n- Gender: ${gender}\n- BMI: ${BMI}\n- Diet Preference: ${diet_type}\n- Goal: ${goal}\n- Duration: ${duration}\n\nPlease provide a complete ${duration} diet plan with:\n1. Weekly calorie targets\n2. Macronutrient breakdown (Protein, Carbs, Fats)\n3. 3 Main meals + 2 snacks per day\n4. Foods rich in essential nutrients\n5. Hydration tips and optional supplements\n\nOutput format:\n- Weekly Summary\n- Daily Meal Plan\n- Notes`;
+    const prompt = `\n🧠 You are a certified AI nutritionist generating personalized diet plans.
+
+👤 Client Profile:
+- Name: ${username}
+- Age: ${age}
+- Gender: ${gender}
+- BMI: ${BMI}
+- Diet Preference: ${diet_type}
+- Goal: ${goal}
+- Duration: ${duration}
+
+📋 Generate a ${duration} diet plan tailored to the above person.
+
+💡 Include:
+1. Personalized calorie recommendations based on BMI, age, and gender
+2. Macro breakdown (carbs, protein, fats) ideal for their goal
+3. Daily meal plans (Breakfast, Lunch, Snacks, Dinner)
+4. Portion sizes and food variety
+5. Notes on hydration, exercise and supplementation tips
+
+📤 Format:
+- 🗓️ Weekly Overview
+- 🍽️ Daily Plans
+- 💬 Motivation Tips
+
+Use unique and suitable suggestions based on the above details.`;
 
     const response = await axios.post(
       FASTAPI_URL,
