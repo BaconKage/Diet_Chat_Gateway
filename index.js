@@ -42,10 +42,28 @@ app.post('/chat/fromdb/:username', async (req, res) => {
   const username = req.params.username;
 
   try {
-    const user = await UserPlan.findOne({ name: username, plan: { $exists: true, $ne: "" } });
-    if (!user) return res.status(404).json({ error: "No plan found." });
+    const user = await UserPlan.findOne({ name: username });
+    if (!user) return res.status(404).json({ error: "User not found in database." });
 
-    res.json({ reply: user.plan });
+    const { age, gender, BMI, diet_type, goal, duration } = user;
+
+    const prompt = `Client Profile:\n- Age: ${age}\n- Gender: ${gender}\n- BMI: ${BMI}\n- Diet Preference: ${diet_type}\n- Goal: ${goal}\n- Duration: ${duration}\n\nPlease provide a complete ${duration} diet plan with:\n1. Weekly calorie targets\n2. Macronutrient breakdown (Protein, Carbs, Fats)\n3. 3 Main meals + 2 snacks per day\n4. Foods rich in essential nutrients\n5. Hydration tips and optional supplements\n\nOutput format:\n- Weekly Summary\n- Daily Meal Plan\n- Notes`;
+
+    const response = await axios.post(
+      FASTAPI_URL,
+      { message: prompt, planType: duration },
+      { headers: { 'Content-Type': 'application/json' } }
+    );
+
+    const reply = response.data.reply || "⚠️ No reply";
+
+    await UserPlan.findOneAndUpdate(
+      { name: username },
+      { plan: reply },
+      { new: true }
+    );
+
+    res.json({ reply });
   } catch (error) {
     console.error("❌ Error in /chat/fromdb:", error.message);
     res.status(500).json({ error: error.message });
@@ -67,48 +85,26 @@ app.get('/debug/all-users', async (req, res) => {
   }
 });
 
-// ✅ Debug: Seed one user (no duplicates)
+// ✅ Debug: Seed multiple users without plans
 app.get('/debug/seed', async (req, res) => {
   try {
-    const existing = await UserPlan.findOne({ name: "Riya Kapoor" });
-    if (existing) return res.json({ message: "User already exists", user: existing });
-
-    const user = new UserPlan({
-      name: "Riya Kapoor",
-      age: 27,
-      gender: "female",
-      goal: "gain muscle",
-      BMI: 21.4,
-      diet_type: "vegetarian",
-      duration: "month",
-      plan: "Sample plan for Riya Kapoor."
-    });
-
-    await user.save();
-    res.json({ message: "✅ Sample user added", user });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ✅ Debug: Seed multiple sample users
-app.get('/debug/seed-many', async (req, res) => {
-  try {
-    const samples = [
-      { name: "Aman Verma", age: 30, gender: "male", goal: "lose weight", BMI: 27.8, diet_type: "vegan", duration: "week", plan: "Plan for Aman Verma." },
-      { name: "Neha Sharma", age: 22, gender: "female", goal: "maintain weight", BMI: 20.1, diet_type: "non-vegetarian", duration: "month", plan: "Plan for Neha Sharma." },
-      { name: "Kunal Rao", age: 35, gender: "male", goal: "gain muscle", BMI: 24.9, diet_type: "vegetarian", duration: "week", plan: "Plan for Kunal Rao." }
+    const sampleUsers = [
+      { name: "Riya Kapoor", age: 27, gender: "female", goal: "gain muscle", BMI: 21.4, diet_type: "vegetarian", duration: "month" },
+      { name: "John Doe", age: 35, gender: "male", goal: "lose fat", BMI: 29.8, diet_type: "non-vegetarian", duration: "week" },
+      { name: "Aarav Patel", age: 22, gender: "male", goal: "stay fit", BMI: 23.1, diet_type: "vegetarian", duration: "month" },
+      { name: "Sneha Rao", age: 30, gender: "female", goal: "improve stamina", BMI: 20.2, diet_type: "vegan", duration: "week" },
+      { name: "Kabir Mehra", age: 28, gender: "male", goal: "gain weight", BMI: 18.5, diet_type: "vegetarian", duration: "month" }
     ];
 
-    for (const s of samples) {
-      await UserPlan.updateOne(
-        { name: s.name },
-        { $set: s },
-        { upsert: true }
+    const inserts = await Promise.all(sampleUsers.map(async (userData) => {
+      return await UserPlan.findOneAndUpdate(
+        { name: userData.name },
+        userData,
+        { upsert: true, new: true, setDefaultsOnInsert: true }
       );
-    }
+    }));
 
-    res.json({ message: "✅ Multiple users seeded." });
+    res.json({ message: "✅ Sample users added/updated", users: inserts });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
